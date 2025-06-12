@@ -1,6 +1,6 @@
 from flask import current_app
 from sklearn.metrics.pairwise import cosine_similarity
-from models.managers.json import tokenize_vietnamese
+from models.managers.mysql import tokenize_vietnamese
 
 def recommend_similar_questions(query, top_n=5):
     try:

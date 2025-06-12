@@ -6,9 +6,9 @@ import pandas as pd
 import google.generativeai as genai
 from config import GOOGLE_API_KEY, LOCAL_URL, PRODUCTION_URL
 
-from models.managers.json import prepare_data
+from models.managers.mysql import prepare_data
 from models.processors.similar_questions import recommend_similar_questions
-from models.processors.llm_chain import generate_alternative_answers
+from models.processors.llm_chain import get_gemini_answer
 from models.managers.pdf import process_directory_pdfs
 from models.processors.text_splitter import get_text_chunks
 from models.storages.vector_database import get_vector_database
@@ -133,7 +133,7 @@ def get_recommend_answers():
             }), 400
             
         answer = process_query(query)
-        alternative_answers = generate_alternative_answers(query, answer)
+        alternative_answers = get_gemini_answer(query, answer)
         if len(alternative_answers) > 5:
             alternative_answers = alternative_answers[:5]
             

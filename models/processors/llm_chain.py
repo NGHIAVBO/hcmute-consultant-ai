@@ -9,7 +9,10 @@ from config import (
     VECTOR_SEARCH_K,
 )
 
-def get_conversational_chain():
+def get_gemini_rag(vector_database, user_question, filter_pdf=None):
+    """
+    Combined RAG (Retrieval Augmented Generation) function using Gemini model
+    """
     prompt_template = """
     Bạn là trợ lý AI thân thiện, chuyên phân tích tài liệu PDF. Trả lời câu hỏi dựa CHỈ vào nội dung tài liệu được cung cấp.
 
@@ -68,24 +71,22 @@ def get_conversational_chain():
     **Trả lời** (dùng Markdown, thân thiện và chi tiết):
     """
 
-    prompt = PromptTemplate(
-        template=prompt_template,
-        input_variables=["context", "question"]
-    )
-    
-    llm = ChatGoogleGenerativeAI(
-        model=GEMINI_MODEL,
-        temperature=TEMPERATURE,
-        max_output_tokens=MAX_OUTPUT_TOKENS,
-        top_k=TOP_K,
-        top_p=TOP_P
-    )
-    
-    return load_qa_chain(llm, chain_type="stuff", prompt=prompt)
-
-def get_gemini_response(vector_database, user_question, filter_pdf=None):
-    chain = get_conversational_chain()
     try:
+        llm = ChatGoogleGenerativeAI(
+            model=GEMINI_MODEL,
+            temperature=TEMPERATURE,
+            max_output_tokens=MAX_OUTPUT_TOKENS,
+            top_k=TOP_K,
+            top_p=TOP_P
+        )
+        
+        prompt = PromptTemplate(
+            template=prompt_template,
+            input_variables=["context", "question"]
+        )
+        
+        chain = load_qa_chain(llm, chain_type="stuff", prompt=prompt)
+
         if filter_pdf:
             docs = [doc for doc_id, doc in vector_database.docstore._dict.items() if doc.metadata.get("source") == filter_pdf]
             if not docs:
@@ -106,17 +107,26 @@ def get_gemini_response(vector_database, user_question, filter_pdf=None):
             try:
                 result = chain.invoke({"input_documents": relevant_docs, "question": user_question}, return_only_outputs=True)
                 processed_result = post_process_tables(result["output_text"])
-                return {"output_text": processed_result["original_response"], "source_documents": relevant_docs, "structured_tables": processed_result["structured_tables"]}
-            except Exception as e:
+                return {
+                    "output_text": processed_result["original_response"], 
+                    "source_documents": relevant_docs, 
+                    "structured_tables": processed_result["structured_tables"]
+                }
+            except Exception:
                 retries += 1
                 if retries == MAX_RETRIES:
-                    print(f"Lỗi sau {MAX_RETRIES} lần thử: {str(e)}")
-                    return {"output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.", "source_documents": [], "structured_tables": []}
-                print(f"Lỗi lần {retries}: {str(e)}. Thử lại sau {BASE_DELAY} giây...")
+                    return {
+                        "output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.", 
+                        "source_documents": [], 
+                        "structured_tables": []
+                    }
                 time.sleep(BASE_DELAY)
-    except Exception as e:
-        print(f"Lỗi: {str(e)}")
-        return {"output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.", "source_documents": [], "structured_tables": []}
+    except Exception:
+        return {
+            "output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.", 
+            "source_documents": [], 
+            "structured_tables": []
+        }
 
 def post_process_tables(response):
     import re
@@ -135,7 +145,10 @@ def post_process_tables(response):
         structured_tables.append({'headers': headers, 'data': data})
     return {'original_response': response, 'structured_tables': structured_tables}
 
-def generate_alternative_answers(question, answer):
+def get_gemini_answer(question, answer):
+    """
+    Generate alternative answers using Gemini model
+    """
     try:
         prompt = f"""
             Dựa vào câu hỏi và câu trả lời gốc dưới đây, hãy tạo chính xác 5 câu trả lời thay thế KHÁC BIỆT HOÀN TOÀN về cách trình bày.
@@ -177,5 +190,56 @@ def generate_alternative_answers(question, answer):
             return raw_answers
         else:
             return []
-    except Exception as e:
+    except Exception:
         return []   
+
+def get_gemini_mysql(user_question):
+    """
+    Get answer from MySQL database using Gemini model
+    """
+    try:
+        # Import here to avoid circular import
+        from models.managers.mysql import fetch_data_from_mysql
+        
+        qa_data = fetch_data_from_mysql()
+        
+        if qa_data.empty:
+            return None
+        
+        qa_pairs = []
+        for _, row in qa_data.iterrows():
+            qa_pairs.append(f"Câu hỏi: {row['question']}\nTrả lời: {row['answer']}")
+        
+        context = "\n\n".join(qa_pairs)
+        
+        prompt = f"""
+        Bạn là trợ lý AI hữu ích trả lời câu hỏi dựa trên nội dung cơ sở dữ liệu.
+        
+        NỘI DUNG CƠ SỞ DỮ LIỆU (Cặp Câu hỏi-Trả lời):
+        {context}
+        
+        CÂU HỎI NGƯỜI DÙNG: {user_question}
+        
+        Dựa CHỈ vào thông tin trong cơ sở dữ liệu trên, cung cấp câu trả lời phù hợp nhất.
+        Nếu không có thông tin liên quan trong cơ sở dữ liệu để trả lời câu hỏi, hãy trả lời "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
+        """
+        
+        model = genai.GenerativeModel(GEMINI_MODEL)
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                temperature=TEMPERATURE,
+                top_p=TOP_P,
+                top_k=TOP_K,
+                max_output_tokens=MAX_OUTPUT_TOKENS,
+            )
+        )
+        
+        if hasattr(response, 'text'):
+            return response.text.strip()
+        else:
+            return None
+            
+    except Exception:
+        return None
+    
