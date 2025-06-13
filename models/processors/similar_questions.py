@@ -9,7 +9,7 @@ def recommend_similar_questions(query, top_n=5):
         query_tokenized = tokenize_vietnamese(query)
         query_tfidf = vectorizer.transform([query_tokenized])
         sim_scores = cosine_similarity(query_tfidf, tfidf_matrix)[0]
-        sim_scores_with_indices = [(idx, score) for idx, score in enumerate(sim_scores) if score > 0.1]
+        sim_scores_with_indices = [(idx, score) for idx, score in enumerate(sim_scores) if score > 0.3]  # Tăng ngưỡng lên 0.3
         sim_scores_with_indices = sorted(sim_scores_with_indices, key=lambda x: x[1], reverse=True)
         top_results = sim_scores_with_indices[:top_n]
         question_indices = [i[0] for i in top_results]

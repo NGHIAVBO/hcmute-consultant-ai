@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, current_app
 from flask_cors import CORS
 import os
 import time
@@ -8,7 +8,7 @@ from config import GOOGLE_API_KEY, LOCAL_URL, PRODUCTION_URL
 
 from models.managers.mysql import prepare_data
 from models.processors.similar_questions import recommend_similar_questions
-from models.processors.llm_chain import get_gemini_answer
+from models.processors.llm_chain import get_gemini_answer, get_gemini_mysql
 from models.managers.pdf import process_directory_pdfs
 from models.processors.text_splitter import get_text_chunks
 from models.storages.vector_database import get_vector_database
@@ -76,7 +76,7 @@ def recommend():
                 'status': 'error',
                 'message': 'Tham số truy vấn "text" là bắt buộc và không được rỗng'
             }), 400
-            
+
         recommended_indices, similarity_scores = recommend_similar_questions(query, 5)
         if not recommended_indices or not similarity_scores:
             return jsonify({
@@ -84,38 +84,60 @@ def recommend():
                 'message': f'Không tìm thấy gợi ý phù hợp cho truy vấn "{query}"',
                 'data': []
             })
-            
-        df = app.config['df']
+
+        df = current_app.config['df']
         recommendations = []
-        
+
         for idx, score in zip(recommended_indices, similarity_scores):
-            if idx < len(df) and score > 0.1:
-                result = {
-                    'question': df.iloc[idx]['question'],
-                    'answer': df.iloc[idx]['answer'],
-                    'similarity_score': float(score)
-                }
-                if 'source' in df.columns:
-                    result['source'] = df.iloc[idx]['source']
-                if 'question_id' in df.columns and not pd.isna(df.iloc[idx].get('question_id')):
-                    result['question_id'] = int(df.iloc[idx]['question_id'])
-                if 'answer_id' in df.columns and not pd.isna(df.iloc[idx].get('answer_id')):
-                    result['answer_id'] = int(df.iloc[idx]['answer_id'])
-                recommendations.append(result)
+            if idx < len(df) and score > 0.3:  # Tăng ngưỡng lên 0.3
+                question = df.iloc[idx]['question']
+                answer = df.iloc[idx]['answer']
                 
+                prompt = f"""
+                    Bạn là trợ lý AI chuyên phân tích độ phù hợp của câu hỏi và câu trả lời.
+                    CÂU HỎI CỦA NGƯỜI DÙNG: {query}
+                    CÂU HỎI TRONG DB: {question}
+                    CÂU TRẢ LỜI: {answer}
+                    Nhiệm vụ của bạn:
+                    Phân tích xem câu hỏi của người dùng và câu hỏi trong DB có thực sự liên quan không
+                    Kiểm tra xem câu trả lời có phù hợp và hữu ích cho câu hỏi của người dùng không
+                    Chỉ trả về True nếu cả hai điều kiện trên đều đúng, ngược lại trả về False
+                    KHÔNG giải thích gì thêm, chỉ trả về True hoặc False
+                """
+                try:
+                    response = get_gemini_mysql(prompt, "")
+                    is_relevant = response and response[0].strip().lower() == "true"
+                except Exception as e:
+                    current_app.logger.warning(f"Gemini check failed: {e}")
+                    is_relevant = True  # fallback nếu Gemini lỗi
+
+                if is_relevant:
+                    result = {
+                        'question': question,
+                        'answer': answer,
+                        'similarity_score': float(score)
+                    }
+                    if 'source' in df.columns:
+                        result['source'] = df.iloc[idx]['source']
+                    if 'question_id' in df.columns and not pd.isna(df.iloc[idx].get('question_id')):
+                        result['question_id'] = int(df.iloc[idx]['question_id'])
+                    if 'answer_id' in df.columns and not pd.isna(df.iloc[idx].get('answer_id')):
+                        result['answer_id'] = int(df.iloc[idx]['answer_id'])
+                    recommendations.append(result)
+
         if not recommendations:
             return jsonify({
                 'status': 'success',
                 'message': f'Không tìm thấy gợi ý phù hợp cho truy vấn "{query}"',
                 'data': []
             })
-            
+
         return jsonify({
             'status': 'success',
             'message': f'Đã gợi ý {len(recommendations)} mục cho truy vấn "{query}"',
             'data': recommendations
         })
-        
+
     except Exception as e:
         return jsonify({
             'status': 'error',
