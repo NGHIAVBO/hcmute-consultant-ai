@@ -15,12 +15,7 @@ import re
 from pyvi import ViTokenizer
 import joblib
 from pathlib import Path
-from config import CURRENT_DIR
-from config import STOPWORDS_FILE
-from config import GEMINI_MODEL
-from config import TOP_P
-from config import TOP_K
-from config import MAX_OUTPUT_TOKENS
+from config import CURRENT_DIR, STOPWORDS_FILE
 try:
     connection_pool = pooling.MySQLConnectionPool(
         pool_name="mypool",
@@ -172,11 +167,13 @@ def create_tfidf_model(df, stopwords):
         content = df['content'] if len(df) > 0 else ["fallback content"]
         tfidf_matrix = vectorizer.fit_transform(content)
         
-        tfidf_path = get_data_path(TFIDF_MATRIX_FILE)
-        vectorizer_path = get_data_path(VECTORIZER_FILE)
-        joblib.dump(tfidf_matrix, tfidf_path)
-        joblib.dump(vectorizer, vectorizer_path)
-
+        try:
+            tfidf_path = get_data_path(TFIDF_MATRIX_FILE)
+            vectorizer_path = get_data_path(VECTORIZER_FILE)
+            joblib.dump(tfidf_matrix, tfidf_path)
+            joblib.dump(vectorizer, vectorizer_path)
+        except Exception as e:
+            print(f"Error saving TF-IDF model: {str(e)}")
         return vectorizer, tfidf_matrix
     except Exception as e:
         return None, None
