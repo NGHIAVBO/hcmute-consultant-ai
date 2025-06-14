@@ -10,10 +10,18 @@ from config import (
 )
 from models.managers.mysql import fetch_data_from_mysql
 
+
+# ==============================================================
+# 1. Hàm RAG chính dùng Gemini
+# ==============================================================
+
 def get_gemini_rag(vector_database, user_question, filter_pdf=None):
     """
-    Combined RAG (Retrieval Augmented Generation) function using Gemini model
+    Combined RAG (Retrieval-Augmented Generation) với Gemini.
+    Bảo đảm: có chào-đầu, kết-thúc lịch sự, định dạng Markdown chuẩn,
+    giữ nguyên hướng dẫn xử lý danh sách/bảng.
     """
+
     prompt_template = """
     Bạn là trợ lý AI thân thiện, chuyên phân tích tài liệu PDF. Trả lời câu hỏi dựa CHỈ vào nội dung tài liệu được cung cấp.
 
@@ -22,12 +30,13 @@ def get_gemini_rag(vector_database, user_question, filter_pdf=None):
     - Không bịa đặt hoặc thêm thông tin ngoài tài liệu.
     - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
     - Trả lời thân thiện, đầy đủ nhưng ngắn gọn.
-    - Bắt đầu câu trả lời bằng "Chào bạn," hoặc các từ ngữ thân thiện tương tự.
-    - Kết thúc câu trả lời bằng các cụm từ như "Cảm ơn câu hỏi của bạn nếu còn câu hỏi nào vui lòng hỏi để mình giúp bạn trả lời" nếu phù hợp.
+    - Bắt đầu câu trả lời bằng "Chào bạn," hoặc từ ngữ thân thiện tương tự.
+    - Kết thúc câu trả lời bằng: "Cảm ơn câu hỏi của bạn, nếu còn câu hỏi nào vui lòng hỏi để mình giúp bạn trả lời."
     - Không đề cập đến độ tin cậy.
 
     **Hướng dẫn về định dạng**:
-    - Khi câu kết thúc bằng "bao gồm:", "như là:", "gồm:", "như sau:", "điều sau:" hoặc dấu hai chấm (:), hãy trình bày thông tin tiếp theo dưới dạng danh sách có cấu trúc với bullet points (sử dụng dấu * hoặc -).
+    - Khi câu kết thúc bằng "bao gồm:", "như là:", "gồm:", "như sau:", "điều sau:" hoặc dấu hai chấm (:),
+      hãy trình bày nội dung tiếp theo dưới dạng danh sách có cấu trúc (bullet) với "*" hoặc "-".
     - Đảm bảo thụt đầu dòng các bullet points để tạo cấu trúc phân cấp rõ ràng.
 
     **Xử lý danh sách từ PDF**:
@@ -51,10 +60,10 @@ def get_gemini_rag(vector_database, user_question, filter_pdf=None):
 
     **Ví dụ về định dạng bảng đúng**:
     ```
-    | Xếp loại | Điểm số | Điểm quy đổi |
-    |----------|---------|--------------|
-    | Xuất sắc | 9.50-10 | 18           |
-    | Giỏi     | 8.50-8.99 | 16         |
+    | Xếp loại | Điểm số   | Điểm quy đổi |
+    |----------|-----------|--------------|
+    | Xuất sắc | 9.50-10   | 18           |
+    | Giỏi     | 8.50-8.99 | 16           |
     ```
 
     **Ví dụ về định dạng danh sách có cấu trúc đúng**:
@@ -69,174 +78,196 @@ def get_gemini_rag(vector_database, user_question, filter_pdf=None):
 
     **Câu hỏi**: {question}
 
-    **Trả lời** (dùng Markdown, thân thiện và chi tiết):
+    **Trả lời** (dùng Markdown, thân thiện, chi tiết):
     """
 
-    try:
-        llm = ChatGoogleGenerativeAI(
-            model=GEMINI_MODEL,
-            temperature=TEMPERATURE,
-            max_output_tokens=MAX_OUTPUT_TOKENS,
-            top_k=TOP_K,
-            top_p=TOP_P
-        )
+    # ----------------- Khởi tạo LLM -----------------
+    llm = ChatGoogleGenerativeAI(
+        model=GEMINI_MODEL,
+        temperature=TEMPERATURE,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
+        top_k=TOP_K,
+        top_p=TOP_P
+    )
 
-        prompt = PromptTemplate(
-            template=prompt_template,
-            input_variables=["context", "question"]
-        )
+    prompt = PromptTemplate(
+        template=prompt_template,
+        input_variables=["context", "question"]
+    )
+    chain = load_qa_chain(llm, chain_type="stuff", prompt=prompt)
 
-        chain = load_qa_chain(llm, chain_type="stuff", prompt=prompt)
+    # ----------------- Truy xuất tài liệu -----------------
+    if filter_pdf:
+        docs = [
+            doc for _, doc in vector_database.docstore._dict.items()
+            if doc.metadata.get("source") == filter_pdf
+        ]
+    else:
+        docs = vector_database.similarity_search(user_question, k=VECTOR_SEARCH_K)
 
-        if filter_pdf:
-            docs = [doc for doc_id, doc in vector_database.docstore._dict.items() if doc.metadata.get("source") == filter_pdf]
-            if not docs:
-                return {"output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.", "source_documents": [], "structured_tables": []}
-            relevant_docs = docs[:MAX_DOCS]
-        else:
-            vector_docs = vector_database.similarity_search(user_question, k=VECTOR_SEARCH_K)
-            relevant_docs = vector_docs[:MAX_DOCS]
-
-        for doc in relevant_docs:
-            if not hasattr(doc, 'metadata'):
-                doc.metadata = {}
-            doc.metadata.setdefault('source', 'không xác định')
-            doc.metadata.setdefault('page', 'không xác định')
-
-        retries = 0
-        while retries < MAX_RETRIES:
-            try:
-                result = chain.invoke({"input_documents": relevant_docs, "question": user_question}, return_only_outputs=True)
-                processed_result = post_process_tables(result["output_text"])
-                return {
-                    "output_text": processed_result["original_response"],
-                    "source_documents": relevant_docs,
-                    "structured_tables": processed_result["structured_tables"]
-                }
-            except Exception:
-                retries += 1
-                if retries == MAX_RETRIES:
-                    return {
-                        "output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.",
-                        "source_documents": [],
-                        "structured_tables": []
-                    }
-                time.sleep(BASE_DELAY)
-    except Exception:
+    if not docs:
         return {
-            "output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.",
+            "output_text": (
+                "Chào bạn, hiện tại hệ thống không tìm thấy thông tin phù hợp để trả lời câu hỏi của bạn. "
+                f"Bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={user_question}' "
+                "class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên hỗ trợ."
+            ),
             "source_documents": [],
             "structured_tables": []
         }
 
-def post_process_tables(response):
+    relevant_docs = docs[:MAX_DOCS]
+    for doc in relevant_docs:
+        doc.metadata = doc.metadata or {}
+        doc.metadata.setdefault('source', 'không xác định')
+        doc.metadata.setdefault('page', 'không xác định')
+
+    # ----------------- Gọi LLM & hậu xử lý -----------------
+    retries = 0
+    while retries < MAX_RETRIES:
+        try:
+            result = chain.invoke(
+                {"input_documents": relevant_docs, "question": user_question},
+                return_only_outputs=True
+            )
+            processed = post_process_tables(result["output_text"])
+
+            # Thêm chào-đầu / kết-thúc nếu thiếu
+            final_resp = processed["original_response"].strip()
+            if not final_resp.lower().startswith("chào"):
+                final_resp = "Chào bạn, " + final_resp
+            if "vui lòng hỏi để mình giúp bạn trả lời" not in final_resp.lower():
+                final_resp += (
+                    "\n\nCảm ơn câu hỏi của bạn, nếu còn câu hỏi nào vui lòng hỏi để mình giúp bạn trả lời."
+                )
+
+            return {
+                "output_text": final_resp,
+                "source_documents": relevant_docs,
+                "structured_tables": processed["structured_tables"]
+            }
+
+        except Exception:
+            retries += 1
+            if retries == MAX_RETRIES:
+                return {
+                    "output_text": "Chào bạn, hệ thống gặp lỗi khi xử lý câu hỏi. Vui lòng thử lại sau.",
+                    "source_documents": [],
+                    "structured_tables": []
+                }
+            time.sleep(BASE_DELAY)
+
+
+# ==============================================================
+# 2. Hậu xử lý bảng Markdown thành cấu trúc JSON
+# ==============================================================
+
+def post_process_tables(response: str):
     import re
     table_pattern = r'\|[^\n]+\|\n\|[-|\s]+\|\n(\|[^\n]+\|\n)+'
     tables = re.findall(table_pattern, response)
     structured_tables = []
+
     for table in tables:
         lines = table.strip().split('\n')
         headers = [h.strip() for h in lines[0].split('|')[1:-1]]
+
         data = []
         for row in lines[2:]:
             if row.strip():
-                values = [cell.strip() for cell in row.split('|')[1:-1]]
-                row_data = {headers[i]: values[i] for i in range(min(len(headers), len(values)))}
-                data.append(row_data)
-        structured_tables.append({'headers': headers, 'data': data})
-    return {'original_response': response, 'structured_tables': structured_tables}
+                cells = [c.strip() for c in row.split('|')[1:-1]]
+                data.append({headers[i]: cells[i] for i in range(min(len(headers), len(cells)))})
 
-def get_gemini_answer(question, answer):
+        structured_tables.append({"headers": headers, "data": data})
+
+    return {"original_response": response, "structured_tables": structured_tables}
+
+
+# ==============================================================
+# 3. Hàm tạo 5 câu trả lời thay thế
+# ==============================================================
+
+def get_gemini_answer(question: str, answer: str):
     """
-    Generate alternative answers using Gemini model
+    Tạo 5 câu trả lời thay thế hoàn toàn khác biệt (độ dài, giọng điệu…).
     """
-    try:
-        prompt = f"""
-            Dựa vào câu hỏi và câu trả lời gốc dưới đây, hãy tạo chính xác 5 câu trả lời thay thế KHÁC BIỆT HOÀN TOÀN về cách trình bày.
-            MỖI câu trả lời PHẢI có:
-            - Độ dài khác nhau (ngắn, trung bình, dài)
-            - Cách tiếp cận khác nhau (trực tiếp, chi tiết, ví dụ thực tế, dưới dạng hướng dẫn)
-            - Giọng điệu khác nhau (trang trọng, thân thiện, chuyên nghiệp, đơn giản)
+    prompt = f"""
+        Dựa vào câu hỏi và câu trả lời gốc dưới đây, hãy tạo chính xác 5 câu trả lời thay thế KHÁC BIỆT HOÀN TOÀN về cách trình bày.
+        MỖI câu trả lời PHẢI có:
+        - Độ dài khác nhau (ngắn, trung bình, dài)
+        - Cách tiếp cận khác nhau (trực tiếp, chi tiết, ví dụ thực tế, hướng dẫn)
+        - Giọng điệu khác nhau (trang trọng, thân thiện, chuyên nghiệp, đơn giản)
 
-            CÂU HỎI: {question}
-            CÂU TRẢ LỜI GỐC: {answer}
+        CÂU HỎI: {question}
+        CÂU TRẢ LỜI GỐC: {answer}
 
-            CHỈ TRẢ VỀ 5 CÂU TRẢ LỜI THAY THẾ, MỖI CÂU TRÊN 1 ĐOẠN VĂN, KHÔNG ĐÁNH SỐ, KHÔNG THÊM BẤT KỲ GIẢI THÍCH NÀO KHÁC.
-        """
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
-                temperature=TEMPERATURE,
-                top_p=TOP_P,
-                top_k=TOP_K,
-                max_output_tokens=MAX_OUTPUT_TOKENS,
-            )
+        CHỈ TRẢ VỀ 5 CÂU TRẢ LỜI THAY THẾ, MỖI CÂU TRÊN 1 ĐOẠN VĂN, KHÔNG ĐÁNH SỐ, KHÔNG GIẢI THÍCH THÊM.
+    """
+    model = genai.GenerativeModel(GEMINI_MODEL)
+    response = model.generate_content(
+        prompt,
+        generation_config=genai.GenerationConfig(
+            temperature=TEMPERATURE,
+            top_p=TOP_P,
+            top_k=TOP_K,
+            max_output_tokens=MAX_OUTPUT_TOKENS,
         )
-        if hasattr(response, 'text'):
-            raw_answers = []
-            current_answer = ""
-            for line in response.text.strip().split('\n'):
-                if line.strip():
-                    if not current_answer:
-                        current_answer = line.strip()
-                    else:
-                        current_answer += " " + line.strip()
-                else:
-                    if current_answer:
-                        raw_answers.append(current_answer)
-                        current_answer = ""
-            if current_answer:
-                raw_answers.append(current_answer)
-            return raw_answers
-        else:
-            return []
-    except Exception:
+    )
+
+    if not hasattr(response, "text"):
         return []
 
-def get_gemini_mysql(user_question):
-    """
-    Get answer from MySQL database using Gemini model
-    """
-    try:
-        qa_data = fetch_data_from_mysql()
-
-        if qa_data.empty:
-            return None
-
-        qa_pairs = []
-        for _, row in qa_data.iterrows():
-            qa_pairs.append(f"Câu hỏi: {row['question']}\nTrả lời: {row['answer']}")
-
-        context = "\n\n".join(qa_pairs)
-
-        prompt = f"""
-        Bạn là trợ lý AI hữu ích trả lời câu hỏi dựa trên nội dung cơ sở dữ liệu.
-
-        NỘI DUNG CƠ SỞ DỮ LIỆU (Cặp Câu hỏi-Trả lời):
-        {context}
-
-        CÂU HỎI NGƯỜI DÙNG: {user_question}
-
-        Dựa CHỈ vào thông tin trong cơ sở dữ liệu trên, cung cấp câu trả lời phù hợp nhất.
-        Nếu không có thông tin liên quan trong cơ sở dữ liệu để trả lời câu hỏi, hãy trả lời "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
-        """
-
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
-                temperature=TEMPERATURE,
-                top_p=TOP_P,
-                top_k=TOP_K,
-                max_output_tokens=MAX_OUTPUT_TOKENS,
-            )
-        )
-
-        if hasattr(response, 'text'):
-            return response.text.strip()
+    raw_answers, current = [], ""
+    for line in response.text.strip().split('\n'):
+        if line.strip():
+            current += (" " if current else "") + line.strip()
         else:
-            return None
+            if current:
+                raw_answers.append(current.strip())
+                current = ""
+    if current:
+        raw_answers.append(current.strip())
+    return raw_answers
 
-    except Exception:
+
+# ==============================================================
+# 4. Truy vấn Q&A từ MySQL bằng Gemini
+# ==============================================================
+
+def get_gemini_mysql(user_question: str):
+    """
+    Trả lời từ cơ sở dữ liệu Q&A MySQL bằng Gemini.
+    """
+    qa_data = fetch_data_from_mysql()
+    if qa_data.empty:
         return None
+
+    qa_pairs = [
+        f"Câu hỏi: {row['question']}\nTrả lời: {row['answer']}"
+        for _, row in qa_data.iterrows()
+    ]
+    context = "\n\n".join(qa_pairs)
+
+    prompt = f"""
+    Bạn là trợ lý AI hữu ích trả lời câu hỏi dựa trên nội dung cơ sở dữ liệu.
+
+    NỘI DUNG CƠ SỞ DỮ LIỆU:
+    {context}
+
+    CÂU HỎI NGƯỜI DÙNG: {user_question}
+
+    Dựa CHỈ vào thông tin trên, hãy cung cấp câu trả lời phù hợp nhất.
+    Nếu không có thông tin liên quan, trả lời: "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
+    """
+
+    model = genai.GenerativeModel(GEMINI_MODEL)
+    response = model.generate_content(
+        prompt,
+        generation_config=genai.GenerationConfig(
+            temperature=TEMPERATURE,
+            top_p=TOP_P,
+            top_k=TOP_K,
+            max_output_tokens=MAX_OUTPUT_TOKENS,
+        )
+    )
+    return response.text.strip() if hasattr(response, "text") else None
