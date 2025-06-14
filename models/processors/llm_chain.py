@@ -3,24 +3,34 @@ import time
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
+import re
 from config import (
     GEMINI_MODEL, TEMPERATURE, MAX_OUTPUT_TOKENS,
     TOP_K, TOP_P, MAX_RETRIES, BASE_DELAY, MAX_DOCS,
     VECTOR_SEARCH_K,
 )
 from models.managers.mysql import fetch_data_from_mysql
+_CLEAN_PATTERN = re.compile(
+    r"Dựa trên thông tin trong SoTaySinhVien2024\.pdf[:,]?\s*",
+    flags=re.I
+)
+
+def clean_question(question: str) -> str:
+    return _CLEAN_PATTERN.sub("", question or "").strip()
 
 def get_gemini_rag(vector_database, user_question, filter_pdf=None):
     """
     Combined RAG (Retrieval Augmented Generation) function using Gemini model
     """
+    question_clean = clean_question(user_question)
+
     prompt_template = """
     Bạn là trợ lý AI thân thiện, chuyên phân tích tài liệu PDF. Trả lời câu hỏi dựa CHỈ vào nội dung tài liệu được cung cấp.
 
     **Quy tắc**:
     - Chỉ dùng thông tin từ tài liệu dưới đây.
     - Không bịa đặt hoặc thêm thông tin ngoài tài liệu.
-    - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
+    - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={question_clean}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
     - Trả lời thân thiện, đầy đủ nhưng ngắn gọn.
     - Không đề cập đến độ tin cậy.
 
