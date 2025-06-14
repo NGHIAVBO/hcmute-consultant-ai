@@ -4,56 +4,50 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from config import (
-    GEMINI_MODEL, TEMPERATURE, MAX_OUTPUT_TOKENS, 
+    GEMINI_MODEL, TEMPERATURE, MAX_OUTPUT_TOKENS,
     TOP_K, TOP_P, MAX_RETRIES, BASE_DELAY, MAX_DOCS,
     VECTOR_SEARCH_K,
 )
-from models.managers.mysql import fetch_data_from_mysql
 
 def get_gemini_rag(vector_database, user_question, filter_pdf=None):
     """
     Combined RAG (Retrieval Augmented Generation) function using Gemini model
     """
     prompt_template = """
-    Bạn là trợ lý AI thân thiện và chuyên nghiệp. 
+    Bạn là trợ lý AI thân thiện, chuyên phân tích tài liệu PDF. Trả lời câu hỏi dựa CHỈ vào nội dung tài liệu được cung cấp.
 
-    **Quy tắc chung**:
-    - Bắt đầu câu trả lời bằng "Chào bạn," hoặc các từ ngữ thân thiện tương tự
-    - Trả lời một cách rõ ràng, dễ hiểu và chuyên nghiệp
-    - Nếu thông tin có nhiều điểm cần liệt kê, sử dụng dấu gạch đầu dòng để trình bày
-    - Kết thúc câu trả lời bằng "Cảm ơn câu hỏi của bạn" hoặc "Rất vui được hỗ trợ bạn" hoặc các cụm từ thân thiện tương tự
-    - Nếu thông tin trong câu trả lời có bảng biểu, sử dụng định dạng markdown table để trình bày
-    - Không đề cập đến độ tin cậy
-    - Không đề cập đến nguồn tài liệu trong câu trả lời
+    **Quy tắc**:
+    - Chỉ dùng thông tin từ tài liệu dưới đây.
+    - Không bịa đặt hoặc thêm thông tin ngoài tài liệu.
+    - Nếu không có thông tin, trả lời: "Xin lỗi, mình không tìm thấy thông tin này trong tài liệu. Bạn có thể hỏi lại hoặc tham khảo thêm từ phòng công tác sinh viên nhé."
+    - Trả lời thân thiện, đầy đủ nhưng ngắn gọn.
+    - Bắt đầu câu trả lời bằng "Chào bạn," hoặc các từ ngữ thân thiện tương tự.
+    - Kết thúc câu trả lời bằng các cụm từ như "Cảm ơn câu hỏi của bạn nếu còn câu hỏi nào vui lòng hỏi để mình giúp bạn trả lời" nếu phù hợp.
+    - Không đề cập đến độ tin cậy.
 
-    **Quy tắc riêng cho phân tích**:
-    - Chỉ dùng thông tin từ tài liệu dưới đây
-    - Không bịa đặt hoặc thêm thông tin ngoài tài liệu
-    - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={user_question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
-    
     **Hướng dẫn về định dạng**:
     - Khi câu kết thúc bằng "bao gồm:", "như là:", "gồm:", "như sau:", "điều sau:" hoặc dấu hai chấm (:), hãy trình bày thông tin tiếp theo dưới dạng danh sách có cấu trúc với bullet points (sử dụng dấu * hoặc -).
     - Đảm bảo thụt đầu dòng các bullet points để tạo cấu trúc phân cấp rõ ràng.
-    
-    **Xử lý danh sách**:
+
+    **Xử lý danh sách từ PDF**:
     - Nhận dạng các dòng bắt đầu bằng "•", "○", "▪", "▫", "►", "➢", "➤", "→", "-" hoặc các dấu tương tự như bullet points.
     - Nhận dạng các dòng bắt đầu bằng "□", "☐", "◯", "○", "⬜" như checkbox chưa chọn.
     - Nhận dạng các dòng bắt đầu bằng "■", "☑", "☒", "●", "⬛" như checkbox đã chọn.
     - Áp dụng cấu trúc phân cấp dựa trên khoảng cách thụt đầu dòng:
       * Nếu dòng thụt vào nhiều hơn so với dòng trên, coi đó là sub-bullet của dòng trên.
       * Nếu một dòng có khoảng cách thụt đầu dòng giống dòng trước, coi chúng cùng cấp.
-    - Chuyển đổi sang Markdown bằng cách:
+    - Chuyển đổi từ định dạng PDF sang Markdown bằng cách:
       * Dùng dấu "*" hoặc "-" cho các bullet points.
       * Thụt đầu dòng 2 hoặc 4 khoảng trắng cho sub-bullets.
       * Dùng "- [ ]" cho checkbox chưa chọn và "- [x]" cho checkbox đã chọn.
-    
+
     **Hướng dẫn về bảng**:
     - Khi trình bày dữ liệu dạng bảng, phải sử dụng định dạng Markdown table với cột và hàng rõ ràng.
     - Ghi rõ tiêu đề các cột.
     - Đảm bảo căn chỉnh các cột phù hợp.
     - Không sử dụng bullet points cho dữ liệu bảng.
     - Trình bày đầy đủ giá trị của từng ô trong bảng.
-    
+
     **Ví dụ về định dạng bảng đúng**:
     ```
     | Xếp loại | Điểm số | Điểm quy đổi |
@@ -61,7 +55,7 @@ def get_gemini_rag(vector_database, user_question, filter_pdf=None):
     | Xuất sắc | 9.50-10 | 18           |
     | Giỏi     | 8.50-8.99 | 16         |
     ```
-    
+
     **Ví dụ về định dạng danh sách có cấu trúc đúng**:
     Các thành phần của quy trình bao gồm:
     * Bước 1: Đăng ký học phần
@@ -85,52 +79,52 @@ def get_gemini_rag(vector_database, user_question, filter_pdf=None):
             top_k=TOP_K,
             top_p=TOP_P
         )
-        
+
         prompt = PromptTemplate(
             template=prompt_template,
             input_variables=["context", "question"]
         )
-        
+
         chain = load_qa_chain(llm, chain_type="stuff", prompt=prompt)
 
         if filter_pdf:
             docs = [doc for doc_id, doc in vector_database.docstore._dict.items() if doc.metadata.get("source") == filter_pdf]
             if not docs:
-                return {"output_text": "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm.", "source_documents": [], "structured_tables": []}
+                return {"output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.", "source_documents": [], "structured_tables": []}
             relevant_docs = docs[:MAX_DOCS]
         else:
             vector_docs = vector_database.similarity_search(user_question, k=VECTOR_SEARCH_K)
             relevant_docs = vector_docs[:MAX_DOCS]
-        
+
         for doc in relevant_docs:
             if not hasattr(doc, 'metadata'):
                 doc.metadata = {}
             doc.metadata.setdefault('source', 'không xác định')
             doc.metadata.setdefault('page', 'không xác định')
-        
+
         retries = 0
         while retries < MAX_RETRIES:
             try:
                 result = chain.invoke({"input_documents": relevant_docs, "question": user_question}, return_only_outputs=True)
                 processed_result = post_process_tables(result["output_text"])
                 return {
-                    "output_text": processed_result["original_response"], 
-                    "source_documents": relevant_docs, 
+                    "output_text": processed_result["original_response"],
+                    "source_documents": relevant_docs,
                     "structured_tables": processed_result["structured_tables"]
                 }
             except Exception:
                 retries += 1
                 if retries == MAX_RETRIES:
                     return {
-                        "output_text": "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm.", 
-                        "source_documents": [], 
+                        "output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.",
+                        "source_documents": [],
                         "structured_tables": []
                     }
                 time.sleep(BASE_DELAY)
     except Exception:
         return {
-            "output_text": "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm.", 
-            "source_documents": [], 
+            "output_text": "Không tìm thấy thông tin. Vui lòng hỏi lại.",
+            "source_documents": [],
             "structured_tables": []
         }
 
@@ -157,25 +151,15 @@ def get_gemini_answer(question, answer):
     """
     try:
         prompt = f"""
-            Bạn là trợ lý AI thân thiện và chuyên nghiệp.
+            Dựa vào câu hỏi và câu trả lời gốc dưới đây, hãy tạo chính xác 5 câu trả lời thay thế KHÁC BIỆT HOÀN TOÀN về cách trình bày.
+            MỖI câu trả lời PHẢI có:
+            - Độ dài khác nhau (ngắn, trung bình, dài)
+            - Cách tiếp cận khác nhau (trực tiếp, chi tiết, ví dụ thực tế, dưới dạng hướng dẫn)
+            - Giọng điệu khác nhau (trang trọng, thân thiện, chuyên nghiệp, đơn giản)
 
-            **Quy tắc chung**:
-            - Bắt đầu và kết thúc câu trả lời một cách tự nhiên, như đang trò chuyện thực sự
-            - Trả lời rõ ràng, dễ hiểu và chuyên nghiệp
-            - Sử dụng ngôn ngữ phù hợp với ngữ cảnh và đối tượng
-            - Giữ giọng điệu tự nhiên, không quá formal hay quá thân mật
-            - Tránh các cụm từ máy móc hoặc công thức
-
-            **Yêu cầu cho các câu trả lời thay thế**:
-            - Tạo 5 cách diễn đạt khác nhau cho cùng một nội dung
-            - Mỗi cách diễn đạt nên có một góc nhìn riêng về vấn đề
-            - Thay đổi cách tiếp cận nhưng vẫn giữ đúng thông tin cốt lõi
-            - Điều chỉnh độ chi tiết phù hợp với từng cách diễn đạt
-            - Sử dụng các ví dụ thực tế khi cần thiết để làm rõ ý
-            
             CÂU HỎI: {question}
             CÂU TRẢ LỜI GỐC: {answer}
-            
+
             CHỈ TRẢ VỀ 5 CÂU TRẢ LỜI THAY THẾ, MỖI CÂU TRÊN 1 ĐOẠN VĂN, KHÔNG ĐÁNH SỐ, KHÔNG THÊM BẤT KỲ GIẢI THÍCH NÀO KHÁC.
         """
         model = genai.GenerativeModel(GEMINI_MODEL)
@@ -207,49 +191,39 @@ def get_gemini_answer(question, answer):
         else:
             return []
     except Exception:
-        return []   
+        return []
 
 def get_gemini_mysql(user_question):
     """
     Get answer from MySQL database using Gemini model
     """
     try:
+        # Import here to avoid circular import
+        from models.managers.mysql import fetch_data_from_mysql
+
         qa_data = fetch_data_from_mysql()
-        
+
         if qa_data.empty:
             return None
-        
+
         qa_pairs = []
         for _, row in qa_data.iterrows():
             qa_pairs.append(f"Câu hỏi: {row['question']}\nTrả lời: {row['answer']}")
-        
-        context = "\n\n".join(qa_pairs)
-        
-        prompt = f"""
-        Bạn là trợ lý AI thân thiện và chuyên nghiệp.
-        
-        **Quy tắc chung**:
-        - Bắt đầu câu trả lời bằng "Chào bạn," hoặc các từ ngữ thân thiện tương tự
-        - Trả lời một cách rõ ràng, dễ hiểu và chuyên nghiệp
-        - Nếu thông tin có nhiều điểm cần liệt kê, sử dụng dấu gạch đầu dòng để trình bày
-        - Kết thúc câu trả lời bằng "Cảm ơn câu hỏi của bạn" hoặc "Rất vui được hỗ trợ bạn" hoặc các cụm từ thân thiện tương tự
-        - Nếu thông tin trong câu trả lời có bảng biểu, sử dụng định dạng markdown table để trình bày
-        - Không đề cập đến độ tin cậy
-        - Không đề cập đến nguồn tài liệu trong câu trả lời
 
-        **Quy tắc riêng cho truy vấn cơ sở dữ liệu**:
-        - Chỉ sử dụng thông tin có trong cơ sở dữ liệu
-        - Không thêm thông tin ngoài cơ sở dữ liệu
-        - Nếu không có thông tin liên quan, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={user_question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
-        
+        context = "\n\n".join(qa_pairs)
+
+        prompt = f"""
+        Bạn là trợ lý AI hữu ích trả lời câu hỏi dựa trên nội dung cơ sở dữ liệu.
+
         NỘI DUNG CƠ SỞ DỮ LIỆU (Cặp Câu hỏi-Trả lời):
         {context}
-        
-        CÂU HỎI NGƯỜI DÙNG: {question}
-        
+
+        CÂU HỎI NGƯỜI DÙNG: {user_question}
+
         Dựa CHỈ vào thông tin trong cơ sở dữ liệu trên, cung cấp câu trả lời phù hợp nhất.
+        Nếu không có thông tin liên quan trong cơ sở dữ liệu để trả lời câu hỏi, hãy trả lời "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
         """
-        
+
         model = genai.GenerativeModel(GEMINI_MODEL)
         response = model.generate_content(
             prompt,
@@ -260,12 +234,11 @@ def get_gemini_mysql(user_question):
                 max_output_tokens=MAX_OUTPUT_TOKENS,
             )
         )
-        
+
         if hasattr(response, 'text'):
             return response.text.strip()
         else:
             return None
-            
+
     except Exception:
         return None
-    
