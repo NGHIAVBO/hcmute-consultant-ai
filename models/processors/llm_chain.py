@@ -223,17 +223,28 @@ def get_gemini_mysql(user_question):
         context = "\n\n".join(qa_pairs)
 
         prompt = f"""
-        Bạn là trợ lý AI hữu ích trả lời câu hỏi dựa trên nội dung cơ sở dữ liệu.
+            Bạn là trợ lý AI hữu ích trả lời câu hỏi dựa trên nội dung cơ sở dữ liệu.
 
-        NỘI DUNG CƠ SỞ DỮ LIỆU (Cặp Câu hỏi-Trả lời):
-        {context}
+            NỘI DUNG CƠ SỞ DỮ LIỆU (Cặp Câu hỏi-Trả lời):
+            {context}
 
-        CÂU HỎI NGƯỜI DÙNG: {user_question}
+            CÂU HỎI NGƯỜI DÙNG: {user_question}
 
-        Dựa CHỈ vào thông tin trong cơ sở dữ liệu trên, cung cấp câu trả lời phù hợp nhất.
-        Nếu không có thông tin liên quan trong cơ sở dữ liệu để trả lời câu hỏi, hãy trả lời "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
+            Dựa CHỈ vào thông tin trong cơ sở dữ liệu trên, cung cấp câu trả lời phù hợp nhất.
+
+            **Quy tắc**:
+            - Chỉ dùng thông tin từ nội dung cơ sở dữ liệu trên.
+            - Không bịa đặt hoặc thêm thông tin ngoài tài liệu.
+            - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={user_question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
+            - Trả lời thân thiện, đầy đủ nhưng ngắn gọn.
+            - Bắt đầu câu trả lời bằng "Chào bạn," hoặc cụm tương tự.
+            - Kết thúc câu trả lời bằng câu như: "Cảm ơn câu hỏi của bạn, nếu còn câu hỏi nào vui lòng hỏi để mình giúp bạn trả lời."
+            - Không đề cập đến độ tin cậy.
+
+            **Hướng dẫn về định dạng**:
+            - Khi câu kết thúc bằng "bao gồm:", "như là:", "gồm:", "như sau:", "điều sau:" hoặc dấu hai chấm (:), hãy trình bày thông tin tiếp theo dưới dạng danh sách có cấu trúc với bullet points (* hoặc -).
+            - Thụt đầu dòng các bullet points để tạo cấu trúc phân cấp rõ ràng.
         """
-
         model = genai.GenerativeModel(GEMINI_MODEL)
         response = model.generate_content(
             prompt,
