@@ -24,7 +24,7 @@ def process_query(prompt):
 
     try:
         mysql_result = get_gemini_mysql(prompt)
-        if mysql_result and "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu" not in mysql_result:
+        if mysql_result and "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={user_question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm." not in mysql_result:
             set_cache(prompt, mysql_result, 0)
             return mysql_result
 
