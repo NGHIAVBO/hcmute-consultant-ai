@@ -8,6 +8,7 @@ from config import (
     TOP_K, TOP_P, MAX_RETRIES, BASE_DELAY, MAX_DOCS,
     VECTOR_SEARCH_K,
 )
+from models.managers.mysql import fetch_data_from_mysql
 
 def get_gemini_rag(vector_database, user_question, filter_pdf=None):
     """
@@ -19,7 +20,7 @@ def get_gemini_rag(vector_database, user_question, filter_pdf=None):
     **Quy tắc**:
     - Chỉ dùng thông tin từ tài liệu dưới đây.
     - Không bịa đặt hoặc thêm thông tin ngoài tài liệu.
-    - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể đặt câu hỏi tại đây để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
+    - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
     - Trả lời thân thiện, đầy đủ nhưng ngắn gọn.
     - Không đề cập đến độ tin cậy.
 
@@ -206,9 +207,6 @@ def get_gemini_mysql(user_question):
     Get answer from MySQL database using Gemini model
     """
     try:
-        # Import here to avoid circular import
-        from models.managers.mysql import fetch_data_from_mysql
-
         qa_data = fetch_data_from_mysql()
 
         if qa_data.empty:
