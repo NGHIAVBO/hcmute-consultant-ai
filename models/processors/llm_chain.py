@@ -236,7 +236,6 @@ def get_gemini_mysql(user_question):
             - Chỉ dùng thông tin từ nội dung cơ sở dữ liệu trên.
             - Không bịa đặt hoặc thêm thông tin ngoài tài liệu.
             - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={user_question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
-            - Trả lời thân thiện, đầy đủ nhưng ngắn gọn.
             - Bắt đầu câu trả lời bằng "Chào bạn," hoặc cụm tương tự.
             - Kết thúc câu trả lời bằng câu như: "Cảm ơn câu hỏi của bạn, nếu còn câu hỏi nào vui lòng hỏi để mình giúp bạn trả lời."
             - Không đề cập đến độ tin cậy.
