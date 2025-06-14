@@ -72,7 +72,7 @@ def get_gemini_rag(vector_database, user_question, filter_pdf=None):
 
     **Tài liệu**: {context}
 
-    **Câu hỏi**: {user_question}
+    **Câu hỏi**: {question}
 
     **Trả lời** (dùng Markdown, thân thiện và chi tiết):
     """
@@ -245,7 +245,7 @@ def get_gemini_mysql(user_question):
         NỘI DUNG CƠ SỞ DỮ LIỆU (Cặp Câu hỏi-Trả lời):
         {context}
         
-        CÂU HỎI NGƯỜI DÙNG: {user_question}
+        CÂU HỎI NGƯỜI DÙNG: {question}
         
         Dựa CHỈ vào thông tin trong cơ sở dữ liệu trên, cung cấp câu trả lời phù hợp nhất.
         """
