@@ -19,7 +19,7 @@ def get_gemini_rag(vector_database, user_question, filter_pdf=None):
     **Quy tắc**:
     - Chỉ dùng thông tin từ tài liệu dưới đây.
     - Không bịa đặt hoặc thêm thông tin ngoài tài liệu.
-    - Nếu không có thông tin, trả lời: "Xin lỗi, mình không tìm thấy thông tin này trong tài liệu. Bạn có thể hỏi lại hoặc tham khảo thêm từ phòng công tác sinh viên nhé."
+    - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
     - Trả lời thân thiện, đầy đủ nhưng ngắn gọn.
     - Bắt đầu câu trả lời bằng "Chào bạn," hoặc các từ ngữ thân thiện tương tự.
     - Kết thúc câu trả lời bằng các cụm từ như "Cảm ơn câu hỏi của bạn nếu còn câu hỏi nào vui lòng hỏi để mình giúp bạn trả lời" nếu phù hợp.
@@ -151,11 +151,21 @@ def get_gemini_answer(question, answer):
     """
     try:
         prompt = f"""
-            Dựa vào câu hỏi và câu trả lời gốc dưới đây, hãy tạo chính xác 5 câu trả lời thay thế KHÁC BIỆT HOÀN TOÀN về cách trình bày.
-            MỖI câu trả lời PHẢI có:
-            - Độ dài khác nhau (ngắn, trung bình, dài)
-            - Cách tiếp cận khác nhau (trực tiếp, chi tiết, ví dụ thực tế, dưới dạng hướng dẫn)
-            - Giọng điệu khác nhau (trang trọng, thân thiện, chuyên nghiệp, đơn giản)
+            Bạn là trợ lý AI thân thiện và chuyên nghiệp.
+
+            **Quy tắc chung**:
+            - Bắt đầu và kết thúc câu trả lời một cách tự nhiên, như đang trò chuyện thực sự
+            - Trả lời rõ ràng, dễ hiểu và chuyên nghiệp
+            - Sử dụng ngôn ngữ phù hợp với ngữ cảnh và đối tượng
+            - Giữ giọng điệu tự nhiên, không quá formal hay quá thân mật
+            - Tránh các cụm từ máy móc hoặc công thức
+
+            **Yêu cầu cho các câu trả lời thay thế**:
+            - Tạo 5 cách diễn đạt khác nhau cho cùng một nội dung
+            - Mỗi cách diễn đạt nên có một góc nhìn riêng về vấn đề
+            - Thay đổi cách tiếp cận nhưng vẫn giữ đúng thông tin cốt lõi
+            - Điều chỉnh độ chi tiết phù hợp với từng cách diễn đạt
+            - Sử dụng các ví dụ thực tế khi cần thiết để làm rõ ý
 
             CÂU HỎI: {question}
             CÂU TRẢ LỜI GỐC: {answer}
