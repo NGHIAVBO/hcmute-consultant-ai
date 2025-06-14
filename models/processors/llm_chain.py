@@ -242,9 +242,11 @@ def get_gemini_mysql(user_question):
             - Không đề cập đến độ tin cậy.
 
             **Hướng dẫn về định dạng**:
-            - Khi câu kết thúc bằng "bao gồm:", "như là:", "gồm:", "như sau:", "điều sau:" hoặc dấu hai chấm (:), hãy trình bày thông tin tiếp theo dưới dạng danh sách có cấu trúc với bullet points (* hoặc -).
-            - Thụt đầu dòng các bullet points để tạo cấu trúc phân cấp rõ ràng.
-        """
+            - Trả lời dưới dạng markdown chuẩn.
+            - Nếu muốn in đậm lời chào, chỉ bôi đậm dòng đầu như "**Chào bạn,**", sau đó xuống dòng viết nội dung.
+            - Khi câu kết thúc bằng “bao gồm:”, “như là:”, “gồm:”, “như sau:”, “điều sau:” hoặc dấu hai chấm (:), hãy trình bày tiếp theo dạng bullet list (* hoặc -).
+            - Bullet list phải thụt dòng rõ ràng (2–4 khoảng trắng nếu cần).
+            """
         model = genai.GenerativeModel(GEMINI_MODEL)
         response = model.generate_content(
             prompt,
