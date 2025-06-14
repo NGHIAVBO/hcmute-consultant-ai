@@ -8,6 +8,7 @@ from config import (
     TOP_K, TOP_P, MAX_RETRIES, BASE_DELAY, MAX_DOCS,
     VECTOR_SEARCH_K,
 )
+from models.managers.mysql import fetch_data_from_mysql
 
 def get_gemini_rag(vector_database, user_question, filter_pdf=None):
     """
@@ -151,21 +152,11 @@ def get_gemini_answer(question, answer):
     """
     try:
         prompt = f"""
-            Bạn là trợ lý AI thân thiện và chuyên nghiệp.
-
-            **Quy tắc chung**:
-            - Bắt đầu và kết thúc câu trả lời một cách tự nhiên, như đang trò chuyện thực sự
-            - Trả lời rõ ràng, dễ hiểu và chuyên nghiệp
-            - Sử dụng ngôn ngữ phù hợp với ngữ cảnh và đối tượng
-            - Giữ giọng điệu tự nhiên, không quá formal hay quá thân mật
-            - Tránh các cụm từ máy móc hoặc công thức
-
-            **Yêu cầu cho các câu trả lời thay thế**:
-            - Tạo 5 cách diễn đạt khác nhau cho cùng một nội dung
-            - Mỗi cách diễn đạt nên có một góc nhìn riêng về vấn đề
-            - Thay đổi cách tiếp cận nhưng vẫn giữ đúng thông tin cốt lõi
-            - Điều chỉnh độ chi tiết phù hợp với từng cách diễn đạt
-            - Sử dụng các ví dụ thực tế khi cần thiết để làm rõ ý
+            Dựa vào câu hỏi và câu trả lời gốc dưới đây, hãy tạo chính xác 5 câu trả lời thay thế KHÁC BIỆT HOÀN TOÀN về cách trình bày.
+            MỖI câu trả lời PHẢI có:
+            - Độ dài khác nhau (ngắn, trung bình, dài)
+            - Cách tiếp cận khác nhau (trực tiếp, chi tiết, ví dụ thực tế, dưới dạng hướng dẫn)
+            - Giọng điệu khác nhau (trang trọng, thân thiện, chuyên nghiệp, đơn giản)
 
             CÂU HỎI: {question}
             CÂU TRẢ LỜI GỐC: {answer}
@@ -208,9 +199,6 @@ def get_gemini_mysql(user_question):
     Get answer from MySQL database using Gemini model
     """
     try:
-        # Import here to avoid circular import
-        from models.managers.mysql import fetch_data_from_mysql
-
         qa_data = fetch_data_from_mysql()
 
         if qa_data.empty:
@@ -223,29 +211,17 @@ def get_gemini_mysql(user_question):
         context = "\n\n".join(qa_pairs)
 
         prompt = f"""
-            Bạn là trợ lý AI hữu ích trả lời câu hỏi dựa trên nội dung cơ sở dữ liệu.
+        Bạn là trợ lý AI hữu ích trả lời câu hỏi dựa trên nội dung cơ sở dữ liệu.
 
-            NỘI DUNG CƠ SỞ DỮ LIỆU (Cặp Câu hỏi-Trả lời):
-            {context}
+        NỘI DUNG CƠ SỞ DỮ LIỆU (Cặp Câu hỏi-Trả lời):
+        {context}
 
-            CÂU HỎI NGƯỜI DÙNG: {user_question}
+        CÂU HỎI NGƯỜI DÙNG: {user_question}
 
-            Dựa CHỈ vào thông tin trong cơ sở dữ liệu trên, cung cấp câu trả lời phù hợp nhất.
+        Dựa CHỈ vào thông tin trong cơ sở dữ liệu trên, cung cấp câu trả lời phù hợp nhất.
+        Nếu không có thông tin liên quan trong cơ sở dữ liệu để trả lời câu hỏi, hãy trả lời "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
+        """
 
-            **Quy tắc**:
-            - Chỉ dùng thông tin từ nội dung cơ sở dữ liệu trên.
-            - Không bịa đặt hoặc thêm thông tin ngoài tài liệu.
-            - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={user_question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
-            - Bắt đầu câu trả lời bằng "Chào bạn," hoặc cụm tương tự.
-            - Kết thúc câu trả lời bằng câu như: "Cảm ơn câu hỏi của bạn, nếu còn câu hỏi nào vui lòng hỏi để mình giúp bạn trả lời."
-            - Không đề cập đến độ tin cậy.
-
-            **Hướng dẫn về định dạng**:
-            - Trả lời dưới dạng markdown chuẩn.
-            - Nếu muốn in đậm lời chào, chỉ bôi đậm dòng đầu như "**Chào bạn,**", sau đó xuống dòng viết nội dung.
-            - Khi câu kết thúc bằng “bao gồm:”, “như là:”, “gồm:”, “như sau:”, “điều sau:” hoặc dấu hai chấm (:), hãy trình bày tiếp theo dạng bullet list (* hoặc -).
-            - Bullet list phải thụt dòng rõ ràng (2–4 khoảng trắng nếu cần).
-            """
         model = genai.GenerativeModel(GEMINI_MODEL)
         response = model.generate_content(
             prompt,
