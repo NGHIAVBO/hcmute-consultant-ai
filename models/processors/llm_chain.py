@@ -217,16 +217,6 @@ def get_gemini_mysql(user_question):
         {context}
 
         CÂU HỎI NGƯỜI DÙNG: {user_question}
-        **Quy tắc**:
-        - Không bịa đặt hoặc thêm thông tin ngoài tài liệu.
-        - Nếu không có thông tin, trả lời: "Chào bạn, cảm ơn bạn đã gửi câu hỏi đến chúng tôi. Tuy nhiên, hiện tại nội dung câu hỏi nằm ngoài phạm vi hỗ trợ của hệ thống. Để được giải đáp chi tiết hơn, bạn có thể <a href='https://hcmute-consultant.vercel.app/create-question?content={question}' class='text-primary hover:underline'>đặt câu hỏi tại đây</a> để được tư vấn viên trả lời. Chúng tôi sẽ ghi nhận câu hỏi này và cập nhật thêm dữ liệu để có thể trả lời tốt hơn trong tương lai. Rất mong bạn thông cảm."
-        - Trả lời thân thiện, đầy đủ nhưng ngắn gọn.
-        - Bắt đầu câu trả lời bằng "Chào bạn," hoặc các từ ngữ thân thiện tương tự.
-        - Không đề cập đến độ tin cậy.
-
-        **Hướng dẫn về định dạng**:
-        - Khi câu kết thúc bằng "bao gồm:", "như là:", "gồm:", "như sau:", "điều sau:" hoặc dấu hai chấm (:), hãy trình bày thông tin tiếp theo dưới dạng danh sách có cấu trúc với bullet points (sử dụng dấu * hoặc -).
-        - Đảm bảo thụt đầu dòng các bullet points để tạo cấu trúc phân cấp rõ ràng.
 
         Dựa CHỈ vào thông tin trong cơ sở dữ liệu trên, cung cấp câu trả lời phù hợp nhất.
         Nếu không có thông tin liên quan trong cơ sở dữ liệu để trả lời câu hỏi, hãy trả lời "Không tìm thấy thông tin liên quan trong cơ sở dữ liệu."
